@@ -1,70 +1,140 @@
-# Getting Started with Create React App
+# chart.js로 박스오피스 영화순위 조회하기
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+### 프로젝트 구조
+```
+public
+│ 
+src ── assets ── style.module.scss
+├── components
+│   ├── Meta.js
+│   ├── MovieRankChart.js
+│   ├── MovieRankList.js
+│   └── Top.js
+├── pages
+│   └── MovieRankPage.js 
+├── slices
+│   └── MovieRankSlice.js
+├── App.js
+├── store.js
+└── index.js
+```
+### 슬라이스 정의 및 axios로 데이터 가져오기
+##### 데이터 요청
+AsyncThunk 비동기로 데이터 가져오기
+parmas로 apiKey,targetDt(날짜값) 보내기
+```
+export const getList = createAsyncThunk("GET_LIST", async(payload, {rejectWithValue})=>{
+   
+    const targetDt = payload.replaceAll('-', '');
+    let result = null;
+  
+   //만약 payload값이 없다면 어제날짜를 기본값으로 설정
+  
+    if(payload === undefined){
+        payload = dayjs().add(-1, 'd').format('YYYYMMDD');
+    }
+   
+   try {
+        
+       
+        const Url = "http://www.kobis.or.kr/kobisopenapi/webservice/rest/boxoffice/searchDailyBoxOfficeList.json"
 
-## Available Scripts
+        result = await axios.get(Url, {
+            params : {
+                key : 'da4074f8387339e2078a14dc346b4759',
+                targetDt : targetDt
+            }
+        });
+    }catch(err){
+        result = rejectWithValue(err.response);
+    }
 
-In the project directory, you can run:
+    return result;
+});
+```
+##### 슬라이스 정의
+```
+export const movieRankSlice = createSlice({
+    name : 'movieRank',
+    initialState : {
+        rt : null,
+        rtmsg : null,
+        item : [],
+        loading : false
+    },
 
-### `yarn start`
+    reducers : {},
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
+    extraReducers : {
+       [getList.pending], [getList.fulfilled], [getList.rejected]
+       ...생략
+    }
+});
+```
+#### 스토어
+```
 
-The page will reload when you make changes.\
-You may also see any lint errors in the console.
+//슬라이스에서 정의한 name속성을 등록
 
-### `yarn test`
+const logger = createLogger();
+const store = configureStore({
+   
+    reducer: {
+        
+        movieRank : MovieRankSlice,
+    },    
+   
+    
+    });
+    export default store;
+```
+#### MovieRankPage
+"react-redux" useSelector를 이용하여 리덕스 스토어에 저장된 상태값 연결 -> 슬라이스에서 정의한 액션함수를 dispatch -> MovieRankList.js에 데이터 보내기
+```
+리덕스 스토어에 저장된 상태값 연결
+const {rt, rtmsg, data, loading} = useSelector((state)=>state.movieRank);
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+```
+```
 
-### `yarn build`
+액션함수 호출(dispatch)
+React.useEffect(()=>{
+        
+        dispatch(getList(targetDt));
+    }, [dispatch, targetDt]);
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+```
+```
+MovieRankList.js에 데이터 보내기 및 데이터 출력
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+<MovieRankList boxOfficeResult={data.boxOfficeResult}/>
+```
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+### MovieRankChart
+MovieRankSlice.js에서 데이터를 받을때 chart.js에 보낼 데이터를 새로운 배열에 담아서 받아오기 -> MovieRankChart.js에 props로 전달
+```
+//영화이름,관객수를 새로운 배열에 담아서 받기
 
-### `yarn eject`
+[getList.fulfilled] : (state, {payload})=>{
 
-**Note: this is a one-way operation. Once you `eject`, you can't go back!**
+            const chartData = {movieNm : [], audiCnt : []}
+            payload.data.boxOfficeResult.dailyBoxOfficeList.forEach((v, i)=>{
+                chartData.movieNm[i] = v.movieNm;
+                chartData.audiCnt[i] = v.audiCnt;
+            });
 
-If you aren't satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+            payload.data.chartData = chartData;
+            return {
+                ...state,
+                rt : payload.status,
+                rtmsg : payload.statusText,
+                data : payload.data,
+                loading : false
+            }
+        },
+```
+```
+//chartData props로 전달 및 chart.js 그래프 출력
 
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you're on your own.
-
-You don't have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn't feel obligated to use this feature. However we understand that this tool wouldn't be useful if you couldn't customize it when you are ready for it.
-
-## Learn More
-
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
-
-To learn React, check out the [React documentation](https://reactjs.org/).
-
-### Code Splitting
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/code-splitting](https://facebook.github.io/create-react-app/docs/code-splitting)
-
-### Analyzing the Bundle Size
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size](https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size)
-
-### Making a Progressive Web App
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app](https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app)
-
-### Advanced Configuration
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/advanced-configuration](https://facebook.github.io/create-react-app/docs/advanced-configuration)
-
-### Deployment
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/deployment](https://facebook.github.io/create-react-app/docs/deployment)
-
-### `yarn build` fails to minify
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
+<MovieRankChart chartData={data.chartData} targetDt={targetDt}/>
+```
